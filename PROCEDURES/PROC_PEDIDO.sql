@@ -1,0 +1,107 @@
+--------------------------------------------------------
+--  Arquivo criado - sexta-feira-fevereiro-21-2025   
+--------------------------------------------------------
+--------------------------------------------------------
+--  DDL for Procedure PROC_PEDIDO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_PEDIDO" (v_cliente in integer, v_valor in number, v_idproduto integer)
+IS   
+    vIDPEDIDO INTEGER;
+    vQTD INTEGER;
+    vVALOR NUMBER;
+
+    ERRO_ING EXCEPTION;
+    ERRO_VALOR EXCEPTION;
+
+    PRAGMA EXCEPTION_INIT(ERRO_VALOR, -20001);
+
+    CURSOR C_CURSOR IS
+        SELECT P.IDPEDIDO FROM PEDIDOS P
+        ORDER BY 1;
+
+    CURSOR C_VERQTD IS
+        SELECT E.QTD FROM ESTOQUE E
+        ORDER BY 1;
+
+    CURSOR C_VERVALOR IS
+        SELECT VALOR FROM PRODUTOS
+        WHERE IDPRODUTO = v_idproduto;
+
+BEGIN
+
+    INSERT INTO PEDIDOS VALUES (SEQ_IDPEDIDO.NEXTVAL, v_cliente, TO_DATE(SYSDATE, 'DD-MM-YYYY HH24:MI:SS'), 'Preparando', v_valor);
+
+    IF NOT C_CURSOR%ISOPEN
+    THEN
+    OPEN C_CURSOR;
+    END IF;
+
+    LOOP
+    FETCH C_CURSOR INTO vIDPEDIDO;
+    EXIT WHEN C_CURSOR%NOTFOUND;
+    END LOOP;
+
+    INSERT INTO PEDIDO_PRODUTOS VALUES (vIDPEDIDO, v_idproduto, 1);
+    CLOSE C_CURSOR;  
+    INSERT INTO VENDAS VALUES(SEQ_IDVENDA.NEXTVAL, TO_DATE(SYSDATE, 'DD-MM-YYYY HH24:MI:SS'), v_valor);
+
+    IF NOT C_VERQTD%ISOPEN
+    THEN
+    OPEN C_VERQTD;
+    END IF;
+
+    LOOP 
+    FETCH C_VERQTD INTO vQTD;
+    EXIT WHEN C_VERQTD%NOTFOUND;
+    END LOOP;
+
+    IF vQTD <= 0 THEN
+    RAISE ERRO_ING;
+    END IF;
+
+    CLOSE C_VERQTD;
+
+    IF NOT C_VERVALOR%ISOPEN
+    THEN
+    OPEN C_VERVALOR;
+    END IF;
+
+    LOOP
+    FETCH C_VERVALOR INTO vVALOR;
+    EXIT WHEN C_VERVALOR%NOTFOUND;
+    END LOOP;
+
+    IF vVALOR != v_valor THEN
+    RAISE ERRO_VALOR;
+    END IF;
+
+
+    IF v_idproduto = 1 THEN  
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 1 OR ID_INGREDIENTE = 2 OR ID_INGREDIENTE = 5;   
+    ELSIF v_idproduto = 2 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 1 OR ID_INGREDIENTE = 2 OR ID_INGREDIENTE = 3;
+    ELSIF v_idproduto = 3 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 11;
+    ELSIF v_idproduto = 4 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 12;
+    ELSIF v_idproduto = 5 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 1 OR ID_INGREDIENTE = 9 OR ID_INGREDIENTE = 2;
+    ELSE RAISE ERRO_ING;
+    END IF;
+
+    COMMIT;
+
+    exception
+    when ERRO_VALOR then
+        DBMS_OUTPUT.PUT_LINE('ERRO VALOR INCORRETO');
+        DBMS_OUTPUT.PUT_LINE(SQLERRM || ' OPERAÇÂO CANCELADA ');
+        ROLLBACK;
+    when ERRO_ING then
+        DBMS_OUTPUT.PUT_LINE('UM OU MAIS INGREDIENTES ESTÃO FORA DE ESTOQUE');
+        ROLLBACK;
+
+END;
+
+/
