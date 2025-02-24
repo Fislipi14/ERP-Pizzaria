@@ -1,0 +1,381 @@
+--------------------------------------------------------
+--  Arquivo criado - segunda-feira-fevereiro-24-2025   
+--------------------------------------------------------
+--------------------------------------------------------
+--  DDL for Procedure PROC_ATT_ENTREGA
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_ATT_ENTREGA" 
+IS
+    vID INTEGER;
+    vSTATUS VARCHAR2(15);
+
+    CURSOR C_AUX IS
+    SELECT E.IDENTREGA, E.STATUS_ENTREGA FROM ENTREGAS E;
+
+BEGIN
+
+    IF NOT C_AUX%ISOPEN THEN
+    OPEN C_AUX;
+    END IF;
+
+    LOOP 
+    FETCH C_AUX INTO vID, vSTATUS;
+    EXIT WHEN C_AUX%NOTFOUND;
+    END LOOP;
+
+    CLOSE C_AUX;
+
+    IF vSTATUS = 'Pendente' THEN
+        UPDATE ENTREGAS SET STATUS_ENTREGA = 'Em Rota' WHERE IDENTREGA = vID;
+    ELSIF vSTATUS = 'Em Rota' THEN 
+        UPDATE ENTREGAS SET STATUS_ENTREGA = 'Entregue' WHERE IDENTREGA = vID;
+    /*ELSE IF vSTATUS == 'Falha' THEN*/
+    END IF;
+
+    COMMIT;
+END;
+
+/
+--------------------------------------------------------
+--  DDL for Procedure PROC_ATT_PEDIDO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_ATT_PEDIDO" 
+IS
+    
+    vID INTEGER;
+    vSTATUS VARCHAR2(15);
+
+    CURSOR C_AUX IS
+    SELECT P.IDPEDIDO, P.STATUS_PEDIDO FROM PEDIDOS P;
+
+BEGIN
+
+    IF NOT C_AUX%ISOPEN THEN
+    OPEN C_AUX;
+    END IF;
+
+    LOOP
+    FETCH C_AUX INTO vID, vSTATUS;
+    EXIT WHEN C_AUX%NOTFOUND;
+    END LOOP;
+
+    CLOSE C_AUX;
+
+    IF vSTATUS = 'Pendente' THEN
+        UPDATE PEDIDOS SET STATUS_PEDIDO = 'Preparando' WHERE IDPEDIDO = vID;
+    ELSIF vSTATUS = 'Preparando' THEN
+        UPDATE PEDIDOS SET STATUS_PEDIDO = 'Pronto' WHERE IDPEDIDO = vID;
+    ELSIF vSTATUS = 'Pronto' THEN 
+        UPDATE PEDIDOS SET STATUS_PEDIDO = 'Entregue' WHERE IDPEDIDO = vID;
+    ELSE
+        NULL;
+    END IF;
+
+    COMMIT;
+
+END;
+
+/
+--------------------------------------------------------
+--  DDL for Procedure PROC_ATT_PREÇO_PROD_GERAL
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_ATT_PREÇO_PROD_GERAL" (vPORCENTAGEM IN INT)AS
+BEGIN
+    
+    UPDATE PRODUTOS SET VALOR = VALOR * (1 + vPORCENTAGEM / 100);
+
+END;
+
+/
+--------------------------------------------------------
+--  DDL for Procedure PROC_ATT_PREÇO_PRODUTO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_ATT_PREÇO_PRODUTO" (vIDPRODUTO IN INT, vPREÇO IN NUMBER) AS
+    
+    ERRO_PROD EXCEPTION;
+    PRAGMA EXCEPTION_INIT(ERRO_PROD, -20001);
+    
+    vMAXID INTEGER;
+    
+    CURSOR C_AUX IS
+    SELECT IDPRODUTO FROM PRODUTOS;
+    
+BEGIN 
+
+    IF NOT C_AUX%ISOPEN THEN
+    OPEN C_AUX;
+    END IF;
+    
+    LOOP
+    FETCH C_AUX INTO vMAXID;
+    EXIT WHEN C_AUX%NOTFOUND;
+    END LOOP;
+    
+    CLOSE C_AUX;
+    
+    IF vIDPRODUTO > vMAXID THEN
+    RAISE ERRO_PROD;
+    END IF;
+    
+    UPDATE PRODUTOS SET VALOR = vPREÇO WHERE IDPRODUTO = vIDPRODUTO;
+    
+    EXCEPTION
+    WHEN ERRO_PROD THEN
+    DBMS_OUTPUT.PUT_LINE(SQLCODE || ' PRODUTO NÃO ENCONTRADO');
+    ROLLBACK;
+    
+END;
+
+/
+--------------------------------------------------------
+--  DDL for Procedure PROC_DESLIGA_FUNCIONARIO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_DESLIGA_FUNCIONARIO" (vIDFUNCIONARIO IN INT) AS
+    ERRO_FUNC EXCEPTION;
+    PRAGMA EXCEPTION_INIT(ERRO_FUNC, -20001);
+
+    vMAXID INTEGER;
+
+    CURSOR C_AUX IS
+    SELECT MAX(IDFUNC) FROM FUNCIONARIOS;
+
+BEGIN
+    IF NOT C_AUX%ISOPEN THEN
+    OPEN C_AUX;
+    END IF;
+
+    LOOP
+    FETCH C_AUX INTO vMAXID;
+    EXIT WHEN C_AUX%NOTFOUND;
+    END LOOP;
+
+    CLOSE C_AUX;
+
+    IF vIDFUNCIONARIO > vMAXID THEN
+    RAISE ERRO_FUNC;
+    END IF;
+
+    UPDATE FUNCIONARIOS SET CARGO = 10 WHERE IDFUNC = vIDFUNCIONARIO;
+
+COMMIT;    
+
+    EXCEPTION
+    WHEN ERRO_FUNC THEN
+    DBMS_OUTPUT.PUT_LINE(SQLCODE || ' Não encontrado');
+    ROLLBACK;
+END;
+
+/
+--------------------------------------------------------
+--  DDL for Procedure PROC_PEDIDO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_PEDIDO" (v_cliente in integer, v_valor in number, v_idproduto integer)
+IS   
+    vIDPEDIDO INTEGER;
+    vQTD INTEGER;
+    vVALOR NUMBER;
+    vMAXID INTEGER;
+
+
+    ERRO_ING EXCEPTION;
+    ERRO_VALOR EXCEPTION;
+    ERRO_CLIENTE EXCEPTION;
+
+    PRAGMA EXCEPTION_INIT(ERRO_CLIENTE, -20000);
+    PRAGMA EXCEPTION_INIT(ERRO_VALOR, -20001);
+
+    CURSOR C_CURSOR IS
+        SELECT P.IDPEDIDO FROM PEDIDOS P
+        ORDER BY 1;
+
+    CURSOR C_VERQTD IS
+        SELECT E.QTD FROM ESTOQUE E
+        ORDER BY 1;
+
+    CURSOR C_VERVALOR IS
+        SELECT VALOR FROM PRODUTOS
+        WHERE IDPRODUTO = v_idproduto;
+
+    CURSOR C_AUX IS
+    SELECT IDPRODUTO FROM PRODUTOS;
+
+BEGIN
+
+    IF NOT C_AUX%ISOPEN THEN
+    OPEN C_AUX;
+    END IF;
+
+    LOOP
+    FETCH C_AUX INTO vMAXID;
+    EXIT WHEN C_AUX%NOTFOUND;
+    END LOOP;
+
+    CLOSE C_AUX;
+
+    IF v_cliente > vMAXID THEN
+    RAISE ERRO_CLIENTE;
+    END IF;
+
+    INSERT INTO PEDIDOS VALUES (SEQ_IDPEDIDO.NEXTVAL, v_cliente, TO_DATE(SYSDATE, 'DD-MM-YYYY HH24:MI:SS'), 'Preparando', v_valor);
+
+    IF NOT C_CURSOR%ISOPEN
+    THEN
+    OPEN C_CURSOR;
+    END IF;
+
+    LOOP
+    FETCH C_CURSOR INTO vIDPEDIDO;
+    EXIT WHEN C_CURSOR%NOTFOUND;
+    END LOOP;
+
+    INSERT INTO PEDIDO_PRODUTOS VALUES (vIDPEDIDO, v_idproduto, 1);
+    CLOSE C_CURSOR;  
+    INSERT INTO VENDAS VALUES(SEQ_IDVENDA.NEXTVAL, TO_DATE(SYSDATE, 'DD-MM-YYYY HH24:MI:SS'), v_valor);
+
+    IF NOT C_VERQTD%ISOPEN
+    THEN
+    OPEN C_VERQTD;
+    END IF;
+
+    LOOP 
+    FETCH C_VERQTD INTO vQTD;
+    EXIT WHEN C_VERQTD%NOTFOUND;
+    END LOOP;
+
+    IF vQTD <= 0 THEN
+    RAISE ERRO_ING;
+    END IF;
+
+    CLOSE C_VERQTD;
+
+    IF NOT C_VERVALOR%ISOPEN
+    THEN
+    OPEN C_VERVALOR;
+    END IF;
+
+    LOOP
+    FETCH C_VERVALOR INTO vVALOR;
+    EXIT WHEN C_VERVALOR%NOTFOUND;
+    END LOOP;
+
+    IF vVALOR != v_valor THEN
+    RAISE ERRO_VALOR;
+    END IF;
+
+
+    IF v_idproduto = 1 THEN  
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 1 OR ID_INGREDIENTE = 2 OR ID_INGREDIENTE = 5;   
+    ELSIF v_idproduto = 2 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 1 OR ID_INGREDIENTE = 2 OR ID_INGREDIENTE = 3;
+    ELSIF v_idproduto = 3 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 11;
+    ELSIF v_idproduto = 4 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 12;
+    ELSIF v_idproduto = 5 THEN 
+        UPDATE ESTOQUE SET QTD = QTD - 1 WHERE ID_INGREDIENTE = 1 OR ID_INGREDIENTE = 9 OR ID_INGREDIENTE = 2;
+    ELSE RAISE ERRO_ING;
+    END IF;
+
+    COMMIT;
+
+    exception
+    when ERRO_VALOR then
+        DBMS_OUTPUT.PUT_LINE('ERRO VALOR INCORRETO');
+        DBMS_OUTPUT.PUT_LINE(SQLERRM || ' OPERAÇÂO CANCELADA ');
+        ROLLBACK;
+    when ERRO_ING then
+        DBMS_OUTPUT.PUT_LINE('UM OU MAIS INGREDIENTES ESTÃO FORA DE ESTOQUE');
+        ROLLBACK;
+    when ERRO_CLIENTE then
+        DBMS_OUTPUT.PUT_LINE(SQLERRM || SQLCODE);
+        DBMS_OUTPUT.PUT_LINE('CLIENTE NÃO EXISTE NA BASE DE DADOS');
+        ROLLBACK;
+
+
+END;
+
+/
+--------------------------------------------------------
+--  DDL for Procedure PROC_REPO_ESTOQUE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE NONEDITIONABLE PROCEDURE "FILIPE"."PROC_REPO_ESTOQUE" (v_idfornecedor in integer, v_idingrediente in integer, v_qtd in integer)
+IS
+    VQTDPROD INTEGER;
+    VVALOR_REPO NUMBER;
+
+    ERRO_VALOR_INV EXCEPTION;
+    ERRO_ING_DESCONHECIDO EXCEPTION;
+
+    PRAGMA EXCEPTION_INIT(ERRO_VALOR_INV, -20000);
+    PRAGMA EXCEPTION_INIT(ERRO_ING_DESCONHECIDO, -20001);
+
+    CURSOR C_AUX IS
+    SELECT COUNT(ID_INGREDIENTE) FROM ESTOQUE;
+
+    CURSOR C_VALOR IS
+    SELECT VALOR FROM FORNECEDOR_INGREDIENTE
+    WHERE ID_INGREDIENTE = v_idingrediente;
+
+BEGIN 
+
+    IF NOT C_AUX%ISOPEN THEN
+    OPEN C_AUX;
+    END IF;
+
+    LOOP
+    FETCH C_AUX INTO VQTDPROD;
+    EXIT WHEN C_AUX%NOTFOUND;
+    END LOOP;
+    CLOSE C_AUX;
+
+    IF NOT C_VALOR%ISOPEN THEN
+    OPEN C_VALOR;
+    END IF;
+
+    LOOP 
+    FETCH C_VALOR INTO VVALOR_REPO;
+    EXIT WHEN C_VALOR%NOTFOUND;
+    END LOOP;
+    CLOSE C_VALOR;
+
+    IF v_idingrediente >= VQTDPROD + 1 OR v_idingrediente <= 0 THEN
+    RAISE ERRO_ING_DESCONHECIDO;
+    END IF;
+
+    IF v_qtd <=0 THEN
+    RAISE ERRO_VALOR_INV;
+    END IF;
+
+    UPDATE ESTOQUE SET QTD = QTD + v_qtd, DATA_ENTRADA = TO_DATE(SYSDATE, 'DD-MM-YYYY HH24:MI:SS')
+    WHERE ID_INGREDIENTE = v_idingrediente;
+
+    INSERT INTO HIST_RESTOQUE VALUES(SEQ_IDRESTOQUE.NEXTVAL, v_idfornecedor, v_idingrediente, v_qtd, (v_qtd * VVALOR_REPO), TO_DATE(SYSDATE, 'DD-MM-YYYY HH24:MI:SS'));
+
+
+    EXCEPTION
+    WHEN ERRO_VALOR_INV THEN
+        DBMS_OUTPUT.PUT_LINE(SQLERRM || SQLCODE);
+        DBMS_OUTPUT.PUT_LINE('QUANTIDADE INVALIDA');    
+        ROLLBACK;
+    WHEN ERRO_ING_DESCONHECIDO THEN
+        DBMS_OUTPUT.PUT_LINE(SQLERRM || SQLCODE);
+        DBMS_OUTPUT.PUT_LINE('INGREDIENTE NÃO REGISTRADO NO BANCO');
+        ROLLBACK;
+
+END;
+
+/
